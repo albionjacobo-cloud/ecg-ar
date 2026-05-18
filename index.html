@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<title>ECG · Realidad Aumentada</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;}
+
+/* ── SPLASH ─────────────────────────────────────────────── */
+#splash{
+  position:fixed;inset:0;z-index:999;
+  background:linear-gradient(160deg,#0d1117 0%,#0a1a12 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:28px;gap:18px;
+}
+.logo{width:72px;height:72px;border-radius:50%;border:2px solid #00e676;display:flex;align-items:center;justify-content:center;}
+.logo svg{width:44px;height:22px;}
+.s-title{font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.5px;text-align:center;}
+.s-sub{font-size:14px;color:#6e7681;text-align:center;line-height:1.6;max-width:280px;}
+.steps{width:100%;max-width:320px;display:flex;flex-direction:column;gap:8px;}
+.step{display:flex;align-items:flex-start;gap:12px;background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;}
+.step-num{width:24px;height:24px;border-radius:50%;background:#00e676;color:#000;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step-text{font-size:13px;color:#c9d1d9;line-height:1.5;}
+.step-text b{color:#fff;}
+.start-btn{width:100%;max-width:320px;background:#00e676;color:#000;border:none;border-radius:14px;padding:16px;font-size:17px;font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s;}
+.start-btn:active{transform:scale(0.97);opacity:0.9;}
+.compat{font-size:11px;color:#484f58;text-align:center;}
+
+/* ── ERROR ──────────────────────────────────────────────── */
+#errorScreen{position:fixed;inset:0;z-index:998;background:#0d1117;display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px;gap:16px;text-align:center;}
+.err-icon{font-size:48px;}
+.err-title{font-size:20px;font-weight:600;color:#fff;}
+.err-msg{font-size:14px;color:#8b949e;line-height:1.6;max-width:280px;}
+.err-btn{background:rgba(255,255,255,0.08);border:0.5px solid rgba(255,255,255,0.15);border-radius:10px;padding:12px 28px;color:#fff;font-size:14px;cursor:pointer;}
+
+/* ── AR VIEW ────────────────────────────────────────────── */
+#arView{position:fixed;inset:0;z-index:100;display:none;}
+#camVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+#ecgCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+#scanCanvas{display:none;}
+
+/* corners */
+.vframe{position:absolute;inset:0;pointer-events:none;}
+.corner{position:absolute;width:28px;height:28px;border-color:var(--ecg-color,#00e676);border-style:solid;transition:border-color .4s;}
+.corner.tl{top:20px;left:20px;border-width:3px 0 0 3px;border-radius:4px 0 0 0;}
+.corner.tr{top:20px;right:20px;border-width:3px 3px 0 0;border-radius:0 4px 0 0;}
+.corner.bl{bottom:200px;left:20px;border-width:0 0 3px 3px;border-radius:0 0 0 4px;}
+.corner.br{bottom:200px;right:20px;border-width:0 3px 3px 0;border-radius:0 0 4px 0;}
+
+/* scan overlay */
+#scanOverlay{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(0,0,0,0.55);
+  pointer-events:none;
+}
+#scanGuide{
+  border:2px dashed rgba(255,255,255,0.5);
+  border-radius:16px;
+  width:220px;height:220px;
+  display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:14px;
+  animation:pulse 2s infinite;
+}
+#scanGuide span{font-size:12px;color:rgba(255,255,255,0.7);font-weight:500;letter-spacing:0.3px;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+
+/* badge */
+#badge{
+  position:absolute;top:20px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.65);
+  border:1px solid var(--ecg-color-alpha,rgba(0,230,118,0.5));
+  border-radius:20px;padding:6px 16px;
+  font-size:12px;color:var(--ecg-color,#00e676);
+  display:flex;align-items:center;gap:7px;
+  backdrop-filter:blur(8px);white-space:nowrap;
+  transition:color .4s,border-color .4s;
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ecg-color,#00e676);animation:blink 1.2s infinite;transition:background .4s;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+
+#exitBtn{position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.6);border:0.5px solid rgba(255,255,255,0.2);border-radius:8px;color:#fff;font-size:13px;padding:7px 14px;cursor:pointer;backdrop-filter:blur(6px);}
+
+/* panel */
+#panel{
+  position:absolute;bottom:0;left:0;right:0;
+  background:rgba(8,8,8,0.92);backdrop-filter:blur(12px);
+  border-top:1px solid var(--ecg-color-alpha,rgba(0,230,118,0.15));
+  padding:14px 16px 36px;
+  transition:border-color .4s;
+}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+#panelTitle{font-size:13px;font-weight:600;color:var(--ecg-color,#00e676);transition:color .4s;}
+#bpmBadge{font-size:12px;color:#fff;background:var(--ecg-color-bg,rgba(0,230,118,0.12));border:0.5px solid var(--ecg-color-border,rgba(0,230,118,0.3));border-radius:6px;padding:3px 10px;transition:background .4s,border-color .4s;}
+.waves{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.wchip{background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 9px;}
+.wchip .wn{font-size:11px;font-weight:600;color:var(--ecg-color,#00e676);margin-bottom:2px;transition:color .4s;}
+.wchip .wd{font-size:9.5px;color:#6e7681;line-height:1.3;}
+.wchip .wv{font-size:10px;color:#c9d1d9;margin-top:3px;font-weight:500;}
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="logo">
+    <svg viewBox="0 0 44 22" fill="none">
+      <polyline points="0,11 5,11 8,3 11,19 14,9 17,13 21,1 25,21 28,11 31,11 34,7 37,15 40,11 44,11"
+        stroke="#00e676" stroke-width="2.2" stroke-linejoin="round" fill="none"/>
+    </svg>
+  </div>
+  <div class="s-title">ECG · Realidad Aumentada</div>
+  <div class="s-sub">Apunta al código QR del libro para ver el trazado en tiempo real</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Presiona <b>"Activar cámara"</b> y acepta el permiso</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text"><b>Apunta al QR</b> impreso en la página del libro</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">El trazado <b>ECG animado</b> aparece en pantalla</div>
+    </div>
+  </div>
+  <button class="start-btn" onclick="startCamera()">Activar cámara</button>
+  <div class="compat">Funciona en Chrome y Safari · iOS y Android</div>
+</div>
+
+<!-- ERROR -->
+<div id="errorScreen">
+  <div class="err-icon">📵</div>
+  <div class="err-title">Sin acceso a la cámara</div>
+  <div class="err-msg">Verifica que el navegador tenga permiso de cámara en los ajustes del celular e intenta de nuevo.</div>
+  <button class="err-btn" onclick="location.reload()">Intentar de nuevo</button>
+</div>
+
+<!-- AR VIEW -->
+<div id="arView">
+  <video id="camVideo" autoplay playsinline muted></video>
+  <canvas id="scanCanvas"></canvas>
+  <canvas id="ecgCanvas"></canvas>
+
+  <div class="vframe">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+
+  <div id="scanOverlay">
+    <div id="scanGuide"><span>Apunta al QR del libro</span></div>
+  </div>
+
+  <div id="badge"><span class="dot"></span><span id="badgeText">ECG en vivo · Normal</span></div>
+  <button id="exitBtn" onclick="exitAR()">✕ Salir</button>
+
+  <div id="panel">
+    <div class="panel-head">
+      <div id="panelTitle">ECG Normal — Ritmo sinusal</div>
+      <div id="bpmBadge">75 lpm</div>
+    </div>
+    <div id="chipsGrid" class="waves"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+/* ── ECG SAMPLE FUNCTIONS ────────────────────────────────── */
+
+function ecgNormal(x) {
+  const t = (x % 200) / 200;
+  if (t >= 0.08 && t < 0.14)      return Math.sin(Math.PI*(t-0.08)/0.06)*0.18;
+  if (t >= 0.22 && t < 0.26)      return -Math.sin(Math.PI*(t-0.22)/0.04)*0.12;
+  if (t >= 0.26 && t < 0.30)      return Math.sin(Math.PI*(t-0.26)/0.04)*1.0;
+  if (t >= 0.30 && t < 0.34)      return -Math.sin(Math.PI*(t-0.30)/0.04)*0.25;
+  if (t >= 0.42 && t < 0.65)      return Math.sin(Math.PI*(t-0.42)/0.23)*0.22;
+  return 0;
+}
+
+function ecgTSVP(x) {
+  // 180 lpm → cycle 83 samples; no visible P (retrograde, buried)
+  const t = (x % 83) / 83;
+  if (t >= 0.28 && t < 0.34)      return -Math.sin(Math.PI*(t-0.28)/0.06)*0.10;
+  if (t >= 0.34 && t < 0.40)      return Math.sin(Math.PI*(t-0.34)/0.06)*1.0;
+  if (t >= 0.40 && t < 0.46)      return -Math.sin(Math.PI*(t-0.40)/0.06)*0.22;
+  if (t >= 0.52 && t < 0.75)      return Math.sin(Math.PI*(t-0.52)/0.23)*0.18;
+  if (t >= 0.82 && t < 0.92)      return -Math.sin(Math.PI*(t-0.82)/0.10)*0.09; // retrograde P
+  return 0;
+}
+
+function ecgFlutter(x) {
+  // F waves 300 lpm (cycle 50), QRS 150 lpm (cycle 100)
+  const fCycle = 50;
+  const ft = (x % fCycle) / fCycle;
+  // Sawtooth F waves
+  let f = ft < 0.65
+    ? (ft / 0.65) * 0.20 - 0.06
+    : ((1 - ft) / 0.35) * (-0.26) + 0.14;
+
+  const qt = (x % 100) / 100;
+  if (qt >= 0.18 && qt < 0.24)    f += -Math.sin(Math.PI*(qt-0.18)/0.06)*0.14;
+  else if (qt >= 0.24 && qt < 0.30) f += Math.sin(Math.PI*(qt-0.24)/0.06)*1.0;
+  else if (qt >= 0.30 && qt < 0.36) f += -Math.sin(Math.PI*(qt-0.30)/0.06)*0.28;
+  return f;
+}
+
+function ecgBloqueo(x) {
+  // 75 lpm, PR prolongado (>200ms visual)
+  const t = (x % 200) / 200;
+  if (t >= 0.04 && t < 0.12)      return Math.sin(Math.PI*(t-0.04)/0.08)*0.18; // P (early)
+  // Long PR gap — QRS starts at t=0.35 vs t=0.22 in normal
+  if (t >= 0.35 && t < 0.39)      return -Math.sin(Math.PI*(t-0.35)/0.04)*0.12;
+  if (t >= 0.39 && t < 0.43)      return Math.sin(Math.PI*(t-0.39)/0.04)*1.0;
+  if (t >= 0.43 && t < 0.47)      return -Math.sin(Math.PI*(t-0.43)/0.04)*0.25;
+  if (t >= 0.55 && t < 0.78)      return Math.sin(Math.PI*(t-0.55)/0.23)*0.22;
+  return 0;
+}
+
+/* ── ARRHYTHMIA CONFIGS ──────────────────────────────────── */
+
+const CONFIGS = {
+  ECG_NORMAL: {
+    name: 'ECG Normal', sub: 'Ritmo sinusal', bpm: '75 lpm',
+    color: '#00e676', bg: 'rgba(0,230,118,0.12)', border: 'rgba(0,230,118,0.3)',
+    fn: ecgNormal,
+    chips: [
+      {n:'Onda P',d:'Despolarización auricular',v:'<100ms'},
+      {n:'Intervalo PR',d:'Conducción AV',v:'120–200ms'},
+      {n:'QRS',d:'Despolarización ventricular',v:'<120ms'},
+      {n:'Segmento ST',d:'Plateau ventricular',v:'Isoeléctrico'},
+      {n:'Onda T',d:'Repolarización ventricular',v:'Positiva'},
+      {n:'Intervalo QT',d:'Sístole eléctrica',v:'360–440ms'},
+    ]
+  },
+  ECG_TSVP: {
+    name: 'TSVP', sub: 'Taquicardia Supraventricular Paroxística', bpm: '180 lpm',
+    color: '#ff6b35', bg: 'rgba(255,107,53,0.12)', border: 'rgba(255,107,53,0.3)',
+    fn: ecgTSVP,
+    chips: [
+      {n:'FC',d:'Frecuencia cardíaca',v:'150–250 lpm'},
+      {n:'QRS',d:'Complejo ventricular',v:'<120ms (estrecho)'},
+      {n:'Onda P',d:'Activación auricular',v:'Retrógrada/ausente'},
+      {n:'Inicio',d:'Forma de inicio',v:'Paroxístico súbito'},
+      {n:'Mecanismo',d:'Tipo de arritmia',v:'Reentrada AV/SA'},
+      {n:'Tratamiento',d:'Primera línea',v:'Vagal / Adenosina'},
+    ]
+  },
+  ECG_FLUTTER: {
+    name: 'Flutter Auricular', sub: 'Conducción 2:1', bpm: '150 lpm',
+    color: '#ffb300', bg: 'rgba(255,179,0,0.12)', border: 'rgba(255,179,0,0.3)',
+    fn: ecgFlutter,
+    chips: [
+      {n:'FC auricular',d:'Flutter auricular',v:'~300 lpm'},
+      {n:'FC ventricular',d:'Respuesta ventricular',v:'150 lpm (2:1)'},
+      {n:'Ondas F',d:'Actividad auricular',v:'Dientes de sierra'},
+      {n:'Conducción',d:'Relación AV',v:'2:1, 3:1, 4:1'},
+      {n:'Eje',d:'Vector auricular',v:'Negativo inf.'},
+      {n:'Cardioversión',d:'Tratamiento',v:'A considerar'},
+    ]
+  },
+  ECG_BLOQUEO_AV1: {
+    name: 'Bloqueo AV 1°', sub: 'Bloqueo AV de Primer Grado', bpm: '75 lpm',
+    color: '#42a5f5', bg: 'rgba(66,165,245,0.12)', border: 'rgba(66,165,245,0.3)',
+    fn: ecgBloqueo,
+    chips: [
+      {n:'Intervalo PR',d:'Conducción AV',v:'>200ms'},
+      {n:'QRS',d:'Complejo ventricular',v:'<120ms (normal)'},
+      {n:'Relación P:QRS',d:'Conducción',v:'1:1'},
+      {n:'FC',d:'Frecuencia cardíaca',v:'Normal (60–100)'},
+      {n:'Conducción',d:'Estado',v:'Retrasada, no bloqueada'},
+      {n:'Causa frecuente',d:'Etiología',v:'Vagal / Fármacos'},
+    ]
+  }
+};
+
+/* ── STATE ───────────────────────────────────────────────── */
+
+let stream = null;
+let animFrame = null;
+let isARActive = false;
+let phase = 0;
+let lastQRTime = 0;
+let currentKey = 'ECG_NORMAL';
+let lastScanMs = 0;
+const SCAN_INTERVAL = 120; // ms between QR scans
+
+/* ── CAMERA ──────────────────────────────────────────────── */
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    const video = document.getElementById('camVideo');
+    video.srcObject = stream;
+    await video.play();
+
+    // Init scan canvas once
+    const sc = document.getElementById('scanCanvas');
+    sc.width = 320; sc.height = 240;
+
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('arView').style.display = 'block';
+    isARActive = true;
+
+    // Default to NORMAL until QR detected
+    applyConfig('ECG_NORMAL');
+    document.getElementById('scanOverlay').style.display = 'flex';
+
+    animFrame = requestAnimationFrame(mainLoop);
+  } catch(err) {
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('errorScreen').style.display = 'flex';
+  }
+}
+
+function exitAR() {
+  isARActive = false;
+  cancelAnimationFrame(animFrame);
+  animFrame = null;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  document.getElementById('arView').style.display = 'none';
+  document.getElementById('splash').style.display = 'flex';
+  phase = 0;
+  lastQRTime = 0;
+}
+
+/* ── MAIN LOOP ───────────────────────────────────────────── */
+
+function mainLoop(ts) {
+  if (!isARActive) return;
+
+  // QR scan at limited rate
+  if (ts - lastScanMs > SCAN_INTERVAL) {
+    scanForQR();
+    lastScanMs = ts;
+  }
+
+  // Determine if QR was seen recently
+  const hasQR = (Date.now() - lastQRTime) < 1500;
+  document.getElementById('scanOverlay').style.display = hasQR ? 'none' : 'flex';
+
+  drawECG(hasQR);
+
+  phase += 1.4;
+  animFrame = requestAnimationFrame(mainLoop);
+}
+
+/* ── QR SCANNING ─────────────────────────────────────────── */
+
+function scanForQR() {
+  const video = document.getElementById('camVideo');
+  if (video.readyState < video.HAVE_ENOUGH_DATA) return;
+  const sc = document.getElementById('scanCanvas');
+  const ctx = sc.getContext('2d');
+  ctx.drawImage(video, 0, 0, sc.width, sc.height);
+  const img = ctx.getImageData(0, 0, sc.width, sc.height);
+  const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+  if (code && CONFIGS[code.data]) {
+    if (code.data !== currentKey) applyConfig(code.data);
+    lastQRTime = Date.now();
+  }
+}
+
+/* ── CONFIG SWITCHER ─────────────────────────────────────── */
+
+function applyConfig(key) {
+  currentKey = key;
+  const cfg = CONFIGS[key];
+
+  // CSS custom properties for color theming
+  const root = document.documentElement;
+  root.style.setProperty('--ecg-color', cfg.color);
+  root.style.setProperty('--ecg-color-alpha', cfg.border);
+
+  document.getElementById('badgeText').textContent = `ECG en vivo · ${cfg.name}`;
+  document.getElementById('panelTitle').textContent = `${cfg.name} — ${cfg.sub}`;
+  document.getElementById('bpmBadge').textContent = cfg.bpm;
+  document.getElementById('bpmBadge').style.background = cfg.bg;
+  document.getElementById('bpmBadge').style.borderColor = cfg.border;
+
+  const grid = document.getElementById('chipsGrid');
+  grid.innerHTML = cfg.chips.map(c =>
+    `<div class="wchip"><div class="wn">${c.n}</div><div class="wd">${c.d}</div><div class="wv">${c.v}</div></div>`
+  ).join('');
+
+  phase = 0;
+}
+
+/* ── ECG DRAWING ─────────────────────────────────────────── */
+
+function drawGrid(ctx, x0, y0, w, h) {
+  ctx.strokeStyle = 'rgba(255,50,50,0.22)';
+  ctx.lineWidth = 0.8;
+  for (let x = 0; x <= w; x += 50) { ctx.beginPath(); ctx.moveTo(x0+x,y0); ctx.lineTo(x0+x,y0+h); ctx.stroke(); }
+  for (let y = 0; y <= h; y += 50) { ctx.beginPath(); ctx.moveTo(x0,y0+y); ctx.lineTo(x0+w,y0+y); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(255,50,50,0.07)';
+  ctx.lineWidth = 0.4;
+  for (let x = 0; x <= w; x += 10) { ctx.beginPath(); ctx.moveTo(x0+x,y0); ctx.lineTo(x0+x,y0+h); ctx.stroke(); }
+  for (let y = 0; y <= h; y += 10) { ctx.beginPath(); ctx.moveTo(x0,y0+y); ctx.lineTo(x0+w,y0+y); ctx.stroke(); }
+}
+
+function drawECG(active) {
+  const canvas = document.getElementById('ecgCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = window.innerWidth, H = window.innerHeight;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  ctx.clearRect(0, 0, W, H);
+
+  if (!active) return;
+
+  const cfg = CONFIGS[currentKey];
+  const panelH = document.getElementById('panel').offsetHeight;
+  const pad = 16, topY = 68;
+  const ecgX = pad, ecgY = topY;
+  const ecgW = W - pad * 2;
+  const ecgH = H - topY - panelH - pad;
+  const mid = ecgY + ecgH / 2;
+  const scaleY = ecgH * 0.36;
+
+  ctx.save();
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(ecgX, ecgY, ecgW, ecgH, 12);
+  else ctx.rect(ecgX, ecgY, ecgW, ecgH);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(10,2,2,0.78)';
+  ctx.fillRect(ecgX, ecgY, ecgW, ecgH);
+  drawGrid(ctx, ecgX, ecgY, ecgW, ecgH);
+
+  // ECG trace
+  ctx.strokeStyle = cfg.color;
+  ctx.lineWidth = 2.4;
+  ctx.shadowColor = cfg.color;
+  ctx.shadowBlur = 7;
+  ctx.beginPath();
+  for (let px = 0; px < ecgW; px++) {
+    const y = mid - cfg.fn(px + phase) * scaleY;
+    px === 0 ? ctx.moveTo(ecgX+px, y) : ctx.lineTo(ecgX+px, y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Cursor dot
+  const curY = mid - cfg.fn(phase + ecgW - 1) * scaleY;
+  ctx.beginPath();
+  ctx.arc(ecgX + ecgW - 1, curY, 5, 0, Math.PI*2);
+  ctx.fillStyle = cfg.color;
+  ctx.fill();
+  ctx.restore();
+
+  // Border
+  ctx.strokeStyle = cfg.border || 'rgba(0,230,118,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(ecgX, ecgY, ecgW, ecgH, 12);
+  else ctx.rect(ecgX, ecgY, ecgW, ecgH);
+  ctx.stroke();
+
+  // "ECG en vivo" badge
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(ecgX+8, ecgY+8, 98, 22, 6);
+  else ctx.rect(ecgX+8, ecgY+8, 98, 22);
+  ctx.fill();
+  ctx.fillStyle = cfg.color;
+  ctx.font = '600 11px -apple-system,sans-serif';
+  ctx.fillText(`● ECG en vivo · ${cfg.name}`, ecgX+14, ecgY+23);
+}
+
+window.addEventListener('resize', () => {
+  const c = document.getElementById('ecgCanvas');
+  c.width = window.innerWidth;
+  c.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
