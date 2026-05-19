@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ECG·AR · Acceso a la app</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Inter',Helvetica,Arial,sans-serif;background:#f4f1eb;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:32px 16px;gap:24px;}
+  h1{font-size:12px;font-weight:600;color:#aaa;letter-spacing:2px;text-transform:uppercase;text-align:center;}
+  .card{background:#fff;border-radius:20px;padding:28px 24px;max-width:360px;width:100%;box-shadow:0 2px 24px rgba(0,0,0,0.08);display:flex;flex-direction:column;align-items:center;gap:18px;}
+  .logo{width:60px;height:60px;border-radius:50%;border:2px solid #00c96a;display:flex;align-items:center;justify-content:center;background:#f0fdf6;}
+  .logo svg{width:36px;height:18px;}
+  .card-title{font-size:22px;font-weight:700;color:#111;letter-spacing:-0.5px;text-align:center;}
+  .card-sub{font-size:13px;color:#888;line-height:1.6;text-align:center;max-width:280px;}
+  .qr-wrap{position:relative;background:#fff;border:2px solid #111;border-radius:14px;padding:14px;}
+  .qr-wrap svg, .qr-wrap #qrsvg svg{display:block;width:200px;height:200px;shape-rendering:crispEdges;}
+  .qr-corner{position:absolute;width:18px;height:18px;border-color:#00c96a;border-style:solid;}
+  .qr-corner.tl{top:-2px;left:-2px;border-width:3px 0 0 3px;border-radius:4px 0 0 0;}
+  .qr-corner.tr{top:-2px;right:-2px;border-width:3px 3px 0 0;border-radius:0 4px 0 0;}
+  .qr-corner.bl{bottom:-2px;left:-2px;border-width:0 0 3px 3px;border-radius:0 0 0 4px;}
+  .qr-corner.br{bottom:-2px;right:-2px;border-width:0 3px 3px 0;border-radius:0 0 4px 0;}
+  .url-pill{background:#0d1117;color:#00e676;font-size:12px;font-weight:600;padding:7px 18px;border-radius:20px;letter-spacing:0.3px;}
+  .steps{width:100%;display:flex;flex-direction:column;gap:8px;}
+  .step{display:flex;align-items:flex-start;gap:10px;}
+  .step-num{width:22px;height:22px;border-radius:50%;background:#00c96a;color:#000;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+  .step-text{font-size:13px;color:#444;line-height:1.5;}
+  .step-text b{color:#111;}
+  .divider{width:100%;height:0.5px;background:#eee;}
+  .note{font-size:11px;color:#aaa;text-align:center;line-height:1.6;}
+  .print-btn{background:#111;color:#fff;border:none;border-radius:10px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s;}
+  .print-btn:hover{opacity:0.85;}
+  @media print{body{background:#fff;padding:0;}.print-btn,h1{display:none;}.card{box-shadow:none;border:1px solid #ddd;margin:0 auto;}}
+</style>
+</head>
+<body>
+
+<h1>Material para imprimir · Libro de ECG</h1>
+
+<div class="card">
+
+  <div class="logo">
+    <svg viewBox="0 0 36 18" fill="none">
+      <polyline points="0,9 4,9 6,2 8,16 10,7 12,11 15,1 18,17 20,9 22,9 24,6 26,12 28,9 36,9"
+        stroke="#00c96a" stroke-width="2" stroke-linejoin="round" fill="none"/>
+    </svg>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+    <div class="card-title">ECG · Realidad Aumentada</div>
+    <div class="card-sub">Escanea este código con la cámara de tu celular para abrir la app</div>
+  </div>
+
+  <div class="qr-wrap">
+    <div class="qr-corner tl"></div><div class="qr-corner tr"></div>
+    <div class="qr-corner bl"></div><div class="qr-corner br"></div>
+    <div id="qrsvg"></div>
+  </div>
+
+  <div class="url-pill">ecg-ar.vercel.app</div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text"><b>Escanea el QR</b> con la cámara nativa de tu celular</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">Toca el <b>enlace</b> que aparece para abrir la app</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">Presiona <b>"Activar cámara"</b> y apunta al QR de cada página</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="note">Compatible con iPhone (Safari) y Android (Chrome)<br>No requiere instalar ninguna app</div>
+</div>
+
+<button class="print-btn" onclick="window.print()">🖨️ &nbsp;Imprimir esta página</button>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+window.addEventListener('DOMContentLoaded', function() {
+  var qr = qrcode(0, 'M');
+  qr.addData('https://ecg-ar.vercel.app');
+  qr.make();
+  var container = document.getElementById('qrsvg');
+  container.innerHTML = qr.createSvgTag(5, 0);
+  var svg = container.querySelector('svg');
+  if (svg) { svg.style.width = '200px'; svg.style.height = '200px'; }
+});
+</script>
+</body>
+</html>
