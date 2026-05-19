@@ -185,13 +185,17 @@ function ecgNormal(x) {
 }
 
 function ecgTSVP(x) {
-  // 180 lpm → cycle 83 samples; no visible P (retrograde, buried)
+  // 180 lpm → cycle 83 samples; delta wave (slurred upstroke = pre-excitation)
   const t = (x % 83) / 83;
-  if (t >= 0.28 && t < 0.34)      return -Math.sin(Math.PI*(t-0.28)/0.06)*0.10;
-  if (t >= 0.34 && t < 0.40)      return Math.sin(Math.PI*(t-0.34)/0.06)*1.0;
-  if (t >= 0.40 && t < 0.46)      return -Math.sin(Math.PI*(t-0.40)/0.06)*0.22;
-  if (t >= 0.52 && t < 0.75)      return Math.sin(Math.PI*(t-0.52)/0.23)*0.18;
-  if (t >= 0.82 && t < 0.92)      return -Math.sin(Math.PI*(t-0.82)/0.10)*0.09; // retrograde P
+  // Delta wave: gradual linear ramp before QRS (onda delta)
+  if (t >= 0.14 && t < 0.26)      return (t - 0.14) / 0.12 * 0.40;
+  // R peak: rapid rise from delta level (0.40) to 1.0, then rapid fall to 0
+  if (t >= 0.26 && t < 0.30)      return 0.40 + ((t - 0.26) / 0.04) * 0.60;
+  if (t >= 0.30 && t < 0.34)      return 1.0 - ((t - 0.30) / 0.04) * 1.0;
+  // S wave
+  if (t >= 0.34 && t < 0.42)      return -Math.sin(Math.PI*(t-0.34)/0.08)*0.20;
+  // T wave
+  if (t >= 0.50 && t < 0.73)      return Math.sin(Math.PI*(t-0.50)/0.23)*0.18;
   return 0;
 }
 
@@ -199,10 +203,8 @@ function ecgFlutter(x) {
   // F waves 300 lpm (cycle 50), QRS 150 lpm (cycle 100)
   const fCycle = 50;
   const ft = (x % fCycle) / fCycle;
-  // Sawtooth F waves
-  let f = ft < 0.65
-    ? (ft / 0.65) * 0.20 - 0.06
-    : ((1 - ft) / 0.35) * (-0.26) + 0.14;
+  // Symmetric sinusoidal F waves (sierra redondeada / circular)
+  let f = Math.sin(2 * Math.PI * ft) * 0.14;
 
   const qt = (x % 100) / 100;
   if (qt >= 0.18 && qt < 0.24)    f += -Math.sin(Math.PI*(qt-0.18)/0.06)*0.14;
